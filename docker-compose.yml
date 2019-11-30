@@ -1,0 +1,72 @@
+version: '3'
+
+services:
+  santak_redis:
+    image: redis:3                  # 指定服务镜像
+    container_name: santak_redis    # 容器名称
+    restart: always                 # 重启方式
+    hostname: redis
+    command: redis-server /usr/local/etc/redis/redis.conf --requirepass 123456  --appendonly yes
+    volumes:                        # 挂载数据卷
+      - /home/ubuntu/docker/redis/redis.conf:/usr/local/etc/redis/redis.conf
+    ports:                          # 映射端口
+      - "6379:6379"
+    networks:                       # 加入指定网络
+      - app-network
+
+  santak_nginx:
+    image: nginx:stable-alpine      # 指定服务镜像
+    container_name: santak_nginx    # 容器名称
+    restart: always                 # 重启方式
+    ports:                          # 映射端口
+      - "80:80"
+    volumes:                        # 挂载数据卷
+      - /etc/localtime:/etc/localtime
+      - /home/ubuntu/docker/nginx/conf.d:/etc/nginx/conf.d
+      - /home/ubuntu/docker/nginx/logs:/var/log/nginx
+    depends_on:                     # 启动顺序
+      - nodejs
+    networks:                       # 加入指定网络
+      - app-network
+
+  santak_mysql:
+    image: mysql:5.7
+    container_name: santak_mysql
+    restart: always
+    ports:                          # 映射端口
+      - "3306:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=root
+      - MYSQL_USER=lovelp           # 创建lovelp用户
+      - MYSQL_PASSWORD=mm123321     # 设置lovelp用户的密码
+      - MYSQL_DATABASE=santak       # 创建初始数据库
+      - TZ=Asia/Shanghai            # 设置时区
+    volumes:                        # 挂载数据卷
+      - /home/ubuntu/docker/mysql:/var/lib/mysql  # 为了数据持久化
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    networks:                       # 加入指定网络
+      - app-network
+
+  nodejs:
+    build:                          # 这里指的是我们刚刚撸的 Dockerfile 文件
+      context: .
+      dockerfile: Dockerfile
+    image: nodejs                   # 镜像名称
+    container_name: nodejs          # 容器名称
+    restart: always                 # 重启方式
+    depends_on:                     # 启动顺序
+      - santak_redis
+      - santak_mysql
+    links:                          # 容器连接
+      - santak_redis:santak_redis
+      - santak_mysql:santak_mysql
+    networks:                       # 加入指定网络
+      - app-network
+
+volumes:
+  certbot-etc:
+  certbot-var:
+
+networks:  # 实现通信
+  app-network:
+    driver: bridge
